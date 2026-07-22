@@ -158,7 +158,7 @@ public class Player : MonoBehaviour
         else
             state = PAttacks.NEUTRAL;
 
-       // Debug.Log(state);
+        Debug.Log(state);
     }
     void Update()
     {
@@ -288,6 +288,7 @@ public class Player : MonoBehaviour
         {
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
             isjumping = true;
+            grounded = false;
         }
     }
 
