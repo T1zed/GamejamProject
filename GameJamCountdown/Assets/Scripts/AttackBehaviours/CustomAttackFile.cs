@@ -15,8 +15,12 @@ public class CustomAttackFile : MonoBehaviour
         Register("Neutral_3", OnNeutral_3);
         Register("Neutral_4", OnNeutral_4);
         Register("Neutral_5", OnNeutral_5);
+        Register("GroundSlam", OnGroundSlam);
 
     }
+
+    [Header("GroundSlam")]
+    public float groundSlamForce = 15f;
 
 
     private Dictionary<string, System.Action<AttackData>> behaviours = new Dictionary<string, System.Action<AttackData>>();
@@ -43,7 +47,7 @@ public class CustomAttackFile : MonoBehaviour
     {
         for (int i = 0; i < 3; i++)
         {
-      
+
             GameObject hit = Instantiate(
                 atk.hitbox,
                 atk.hitbox.transform.position,
@@ -51,26 +55,26 @@ public class CustomAttackFile : MonoBehaviour
                 atk.hitbox.transform.parent
             );
 
-        
+
             Vector3 pos = hit.transform.localPosition;
             pos.x = Mathf.Abs(pos.x) * (player.right ? 1f : -1f);
             hit.transform.localPosition = pos;
 
             hit.SetActive(true);
-            yield return new WaitForSeconds(0.2f); 
+            yield return new WaitForSeconds(0.2f);
             hit.SetActive(false);
             Destroy(hit);
 
-            yield return new WaitForSeconds(0.05f); 
+            yield return new WaitForSeconds(0.05f);
         }
     }
 
     private void OnNeutral_4(AttackData atk)
     {
-        StartCoroutine(Dash(2f,0.15f, opposite: true));
+        StartCoroutine(Dash(2f, 0.15f, opposite: true));
 
     }
-    private IEnumerator Dash(float length,float duration, bool opposite = false)
+    private IEnumerator Dash(float length, float duration, bool opposite = false)
     {
         var rb = GetComponent<Rigidbody2D>();
         player.isAttackDashing = true;
@@ -89,11 +93,39 @@ public class CustomAttackFile : MonoBehaviour
         }
 
         rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
-        player.isAttackDashing = false; 
+        player.isAttackDashing = false;
     }
 
     private void OnNeutral_5(AttackData atk)
     {
-        StartCoroutine(Dash(3f,0.1f, opposite: false));
+        StartCoroutine(Dash(3f, 0.1f, opposite: false));
+    }
+
+    private void OnGroundSlam(AttackData atk)
+    {
+        StartCoroutine(GroundSlam(atk));
+    }
+
+    private IEnumerator GroundSlam(AttackData atk)
+    {
+        var rb = GetComponent<Rigidbody2D>();
+        player.isAttackDashing = true; 
+
+    
+        rb.linearVelocity = new Vector2(0f, 0f);
+        rb.AddForce(Vector2.down * groundSlamForce, ForceMode2D.Impulse);
+
+        yield return new WaitUntil(() => player.grounded);
+
+    
+        if (atk.hitbox != null)
+        {
+            GameObject hit = Instantiate(atk.hitbox, transform.position, atk.hitbox.transform.rotation);
+            hit.SetActive(true);
+            yield return new WaitForSeconds(0.1f);
+            Destroy(hit);
+        }
+
+        player.isAttackDashing = false;
     }
 }

@@ -704,7 +704,7 @@ MonoBehaviour:
   - attackName: GroundSlam
     hitbox: {fileID: 402301858}
     damage: 1
-    duration: 5
+    duration: 0
     comboWindow: 0.3
     hitboxLatency: 0
     bump: 0
@@ -756,6 +756,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb1787a0e87bc974584a5b986001949d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  groundSlamForce: 15
 --- !u!33 &234656207
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -1053,7 +1054,7 @@ Transform:
   m_GameObject: {fileID: 402301858}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.8, y: -0.22, z: 0}
+  m_LocalPosition: {x: 0.03, y: -0.67, z: 0}
   m_LocalScale: {x: 4.47, y: 0.67, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
