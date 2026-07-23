@@ -37,13 +37,24 @@ public class Player : MonoBehaviour
     public bool right;
     public PAttacks state;
     [Header("Movement")]
-    public float moveSpeed = 5f;
+    public float acceleration = 20f;    // vitesse gagnée par seconde en maintenant une direction (pas de limite haute)
+    public float deceleration = 25f;    // vitesse perdue par seconde quand la touche est relâchée
     public float jumpForce = 5f;
 
     [Header("Ground Check")]
     [SerializeField] private Transform groundCheck;
     [SerializeField] private float groundCheckRadius = 0.2f;
     [SerializeField] private LayerMask groundLayer;
+
+    [Header("Slope")]
+    [SerializeField] private float slopeCheckDistance = 0.6f;
+    [SerializeField] private float maxSlopeAngle = 60f;    
+    [SerializeField] private float downhillBoost = 1.6f;   
+    [SerializeField] private float uphillResistance = 0.5f; 
+    private float slopeAngle;
+    private Vector2 slopeNormal = Vector2.up;
+    private bool onSlope;
+
 
     [Header("Dash")]
     public float dashCooldown = 0.3f;
@@ -62,7 +73,7 @@ public class Player : MonoBehaviour
     [Header("WallJump")]
     private bool isWallJumping;
     private float wallJumpDirection;
-    private float wallJumpTime=0.2f;
+    private float wallJumpTime = 0.2f;
     private float wallJumpingCounter;
     private float wallJumpingDirection = 0.4f;
     private Vector2 wallJumpingPower = new Vector2(11f, 11f);
@@ -78,7 +89,7 @@ public class Player : MonoBehaviour
     private bool isPressingDown = false;
 
     [Header("animations")]
-    [SerializeField]private Animator animator;
+    [SerializeField] private Animator animator;
     void Awake()
     {
         playerAction = new PlayerAction();
@@ -99,9 +110,9 @@ public class Player : MonoBehaviour
         moveAction = playerAction.Player.Move;
         dashAction = playerAction.Player.Dash;
         jumpAction = playerAction.Player.Jump;
-        AttackAction=playerAction.Player.Attack;
+        AttackAction = playerAction.Player.Attack;
         DownAction = playerAction.Player.Down;
-        SecondaryAttackAction=playerAction.Player.SecondaryAttack;
+        SecondaryAttackAction = playerAction.Player.SecondaryAttack;
 
         jumpAction.started += OnJumpStarted;
         jumpAction.canceled += OnJumpCanceled;
@@ -131,7 +142,7 @@ public class Player : MonoBehaviour
         if (locked)
         {
             rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
-            
+
         }
         else
         {
@@ -168,14 +179,14 @@ public class Player : MonoBehaviour
         bool isPressingLeft = moveInput.x < 0;
         bool isMoving = isPressingRight || isPressingLeft;
         WallSlide();
-        WallJump(); 
+        WallJump();
         if (!isMovementLocked)
         {
             if (isPressingRight && !wasRight)
             {
                 right = true;
                 transform.localScale = new Vector3(1f, transform.localScale.y, transform.localScale.z);
-      
+
             }
             else if (isPressingLeft && !wasLeft)
             {
@@ -188,27 +199,76 @@ public class Player : MonoBehaviour
             animator.SetBool("isRunning", isMoving);
         }
         StateShow(isPressingLeft, isPressingRight);
-      
+
         wasRight = isPressingRight;
         wasLeft = isPressingLeft;
     }
-    [SerializeField] float maxGravityScale = 5f;     
+    [SerializeField] float maxGravityScale = 5f;
     [SerializeField] float gravityAcceleration = 0.5f;
     public bool isAttackDashing = false;
 
     void FixedUpdate()
     {
         grounded = IsGrounded();
+        DetectSlope();
+
         if (grounded && rb.linearVelocityY <= 0f)
             isjumping = false;
 
-        if (!isDashing && !isAttackDashing) 
+        if (!isDashing && !isAttackDashing)
         {
             Vector2 velocity = rb.linearVelocity;
-            velocity.x = isMovementLocked ? 0f : moveInput.x * moveSpeed;
+
+            if (isMovementLocked)
+            {
+                velocity.x = 0f;
+            }
+            else if (moveInput.x != 0f)
+            {
+                float accel = acceleration;
+
+                if (grounded && onSlope)
+                {
+                   
+                    Vector2 tangent = new Vector2(slopeNormal.y, -slopeNormal.x);
+
+    
+                    bool movingDownhill = (moveInput.x > 0f && tangent.y < 0f) || (moveInput.x < 0f && tangent.y > 0f);
+                    float slopeRatio = Mathf.Clamp01(slopeAngle / maxSlopeAngle); 
+
+                    accel *= movingDownhill
+                        ? Mathf.Lerp(1f, downhillBoost, slopeRatio)
+                        : Mathf.Lerp(1f, uphillResistance, slopeRatio);
+                }
+
+                velocity.x += moveInput.x * accel * Time.fixedDeltaTime;
+            }
+            else
+            {
+                velocity.x = Mathf.MoveTowards(velocity.x, 0f, deceleration * Time.fixedDeltaTime);
+            }
+
             rb.linearVelocity = velocity;
         }
     }
+
+    private void DetectSlope()
+    {
+        RaycastHit2D hit = Physics2D.Raycast(groundCheck.position, Vector2.down, slopeCheckDistance, groundLayer);
+        if (hit)
+        {
+            slopeNormal = hit.normal;
+            slopeAngle = Vector2.Angle(hit.normal, Vector2.up);
+            onSlope = slopeAngle > 0.1f && slopeAngle < maxSlopeAngle;
+        }
+        else
+        {
+            slopeNormal = Vector2.up;
+            slopeAngle = 0f;
+            onSlope = false;
+        }
+    }
+
     public bool IsWalled()
     {
         return Physics2D.OverlapCircle(wallCheck.transform.position, 0.2f, wallLayer);
@@ -245,7 +305,7 @@ public class Player : MonoBehaviour
         if (jumpPressed && wallJumpingCounter > 0f)
         {
             isWallJumping = true;
-            jumpPressed = false; 
+            jumpPressed = false;
             rb.linearVelocity = new Vector2(wallJumpDirection * wallJumpingPower.x, wallJumpingPower.y);
             wallJumpingCounter = 0f;
 
@@ -273,8 +333,17 @@ public class Player : MonoBehaviour
     private void OnDrawGizmosSelected()
     {
         if (groundCheck == null) return;
-        Gizmos.color = Color.red;
+ 
+        Gizmos.color = Application.isPlaying && grounded ? Color.green : Color.red;
         Gizmos.DrawWireSphere(groundCheck.position, groundCheckRadius);
+
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawLine(groundCheck.position, groundCheck.position + Vector3.down * slopeCheckDistance);
+        if (Application.isPlaying && onSlope)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawLine(groundCheck.position, (Vector3)groundCheck.position + (Vector3)slopeNormal);
+        }
     }
 
     private bool jumpPressed;
@@ -301,7 +370,7 @@ public class Player : MonoBehaviour
             isjumping = false;
         }
 
-     
+
     }
     private void OnDown(InputAction.CallbackContext ctx)
     {
@@ -333,21 +402,21 @@ public class Player : MonoBehaviour
 
         Vector2 input = moveInput.normalized;
 
-        Vector2 dir = input != Vector2.zero ? input : new Vector2(right ? 1f : -1f, 0f); 
+        Vector2 dir = input != Vector2.zero ? input : new Vector2(right ? 1f : -1f, 0f);
 
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         rb.gravityScale = 0f;
-        rb.linearVelocity  = dir * dashSpeed;
+        rb.linearVelocity = dir * dashSpeed;
         float timer = 0f;
         while (timer < dashDuration)
         {
             if (!isDashing) yield break;
 
-             rb.linearVelocity  = dir * dashSpeed;
+            rb.linearVelocity = dir * dashSpeed;
             timer += Time.fixedDeltaTime;
             yield return new WaitForFixedUpdate();
         }
-        rb.linearVelocity  = Vector2.zero;
+        rb.linearVelocity = Vector2.zero;
         rb.gravityScale = 1f;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Discrete;
         isDashing = false;
@@ -366,7 +435,7 @@ public class Player : MonoBehaviour
     {
         if (isDashing && dashCoroutine != null)
         {
-            StopCoroutine(dashCoroutine); 
+            StopCoroutine(dashCoroutine);
             rb.linearVelocity = Vector2.zero;
             rb.gravityScale = 1f;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Discrete;
@@ -377,7 +446,7 @@ public class Player : MonoBehaviour
     private void ExitWallSlide()
     {
         rb.gravityScale = 1f;
-         rb.linearVelocity  = Vector2.zero;
+        rb.linearVelocity = Vector2.zero;
         isWallSliding = false;
     }
 }
